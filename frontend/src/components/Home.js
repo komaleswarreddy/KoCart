@@ -22,7 +22,7 @@ const Home = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [sortBy, setSortBy] = useState('');
 
-  const categories = ['Electronics', 'Clothing', 'Books', 'Home & Kitchen', 'Sports'];
+  const categories = ['Electronics', 'Fashion'];
   const sortOptions = [
     { value: 'price_asc', label: 'Price: Low to High' },
     { value: 'price_desc', label: 'Price: High to Low' },
@@ -38,39 +38,23 @@ const Home = () => {
       setLoading(true);
       let url = 'http://localhost:5000/api/products?';
       if (searchTerm) url += `search=${searchTerm}&`;
-      if (selectedCategory) url += `categories=${selectedCategory}&`;
+      if (selectedCategory) url += `category=${selectedCategory}&`;
       if (sortBy) url += `sortBy=${sortBy}`;
 
       const response = await fetch(url);
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Could not fetch products');
+        throw new Error('Failed to fetch products');
       }
-      
       const data = await response.json();
       setProducts(data);
+      setError(null);
     } catch (err) {
-      setError(err.message);
+      console.error('Error fetching products:', err);
+      setError('Failed to load products. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
-
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
-        <Typography color="error">{error}</Typography>
-      </Box>
-    );
-  }
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
@@ -131,28 +115,57 @@ const Home = () => {
       </Paper>
 
       {/* Products Grid */}
-      <Grid container spacing={4}>
-        {products.map((product) => (
-          <Grid item key={product._id} xs={12} sm={6} md={4} lg={3}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <ProductCard product={product} />
-            </motion.div>
+      <Box sx={{ position: 'relative', minHeight: loading ? '400px' : 'auto' }}>
+        {loading ? (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              bgcolor: 'rgba(255,255,255,0.8)',
+              zIndex: 1,
+            }}
+          >
+            <CircularProgress />
+          </Box>
+        ) : error ? (
+          <Box textAlign="center" py={8}>
+            <Typography color="error" variant="h6">
+              {error}
+            </Typography>
+          </Box>
+        ) : products.length === 0 ? (
+          <Box textAlign="center" py={8}>
+            <Typography variant="h6" color="textSecondary">
+              No products found
+            </Typography>
+          </Box>
+        ) : (
+          <Grid container spacing={3}>
+            {products.map((product) => (
+              <Grid
+                item
+                key={product._id}
+                xs={12}
+                sm={6}
+                md={4}
+                lg={3}
+                component={motion.div}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ProductCard product={product} />
+              </Grid>
+            ))}
           </Grid>
-        ))}
-      </Grid>
-
-      {/* No Products Found */}
-      {products.length === 0 && (
-        <Box textAlign="center" py={8}>
-          <Typography variant="h5" color="textSecondary">
-            No products found
-          </Typography>
-        </Box>
-      )}
+        )}
+      </Box>
     </Container>
   );
 };

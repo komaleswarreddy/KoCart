@@ -1,11 +1,21 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Box, Typography, Paper, Fade } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ImageIcon from '@mui/icons-material/Image';
 
 const ImageDropzone = ({ onImageUpload, existingImage }) => {
-  const [preview, setPreview] = useState(existingImage || null);
+  const [preview, setPreview] = useState(null);
+
+  useEffect(() => {
+    // Update preview when existingImage changes
+    if (existingImage) {
+      // If it's a full URL or starts with /uploads/, use it directly
+      setPreview(existingImage.startsWith('http') || existingImage.startsWith('/uploads/') 
+        ? existingImage 
+        : `/uploads/${existingImage}`);
+    }
+  }, [existingImage]);
 
   const onDrop = useCallback(
     (acceptedFiles) => {
@@ -14,7 +24,7 @@ const ImageDropzone = ({ onImageUpload, existingImage }) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           setPreview(reader.result);
-          onImageUpload({ file, preview: reader.result });
+          onImageUpload(file); // Just pass the file, no need for preview
         };
         reader.readAsDataURL(file);
       }
@@ -28,6 +38,7 @@ const ImageDropzone = ({ onImageUpload, existingImage }) => {
       'image/*': ['.jpeg', '.jpg', '.png', '.webp'],
     },
     multiple: false,
+    maxSize: 5242880, // 5MB
   });
 
   return (
@@ -57,6 +68,8 @@ const ImageDropzone = ({ onImageUpload, existingImage }) => {
               flexDirection: 'column',
               alignItems: 'center',
               gap: 2,
+              minHeight: '200px',
+              justifyContent: 'center',
             }}
           >
             {preview ? (
@@ -70,6 +83,9 @@ const ImageDropzone = ({ onImageUpload, existingImage }) => {
                   objectFit: 'cover',
                   borderRadius: 1,
                   mb: 2,
+                }}
+                onError={(e) => {
+                  e.target.src = '/placeholder.png';
                 }}
               />
             ) : (
@@ -88,7 +104,7 @@ const ImageDropzone = ({ onImageUpload, existingImage }) => {
                 : 'Drag & drop an image here, or click to select'}
             </Typography>
             <Typography variant="caption" color="textSecondary">
-              Supports: JPG, JPEG, PNG, WebP
+              Supports: JPG, JPEG, PNG, WebP (Max 5MB)
             </Typography>
           </Box>
         </Paper>

@@ -27,13 +27,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, '/uploads');
+const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Serve uploaded files
-app.use('/uploads', express.static(uploadsDir));
+// Serve static files from the uploads directory with proper MIME types
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.webp')) {
+      res.setHeader('Content-Type', 'image/webp');
+    }
+  },
+}));
 
 // Routes
 app.use('/api/users', userRoutes);

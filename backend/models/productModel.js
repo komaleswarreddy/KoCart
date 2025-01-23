@@ -11,9 +11,10 @@ const productSchema = mongoose.Schema(
       type: String,
       required: true,
     },
-    imageUrl: {
+    image: {
       type: String,
       required: true,
+      default: '/placeholder.png',
     },
     description: {
       type: String,
@@ -22,7 +23,6 @@ const productSchema = mongoose.Schema(
     category: {
       type: String,
       required: true,
-      enum: ['Electronics', 'Clothing', 'Books', 'Home & Kitchen', 'Sports', 'Others'],
     },
     price: {
       type: Number,

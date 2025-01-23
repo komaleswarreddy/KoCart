@@ -19,6 +19,7 @@ const {
   deleteProduct,
 } = require('../controllers/productController');
 const { protect, admin } = require('../middleware/authMiddleware');
+const upload = require('../middleware/uploadMiddleware');
 
 // All routes are protected with both protect and admin middleware
 router.use(protect);
@@ -39,10 +40,10 @@ router.route('/users/:id')
 // Product routes
 router.route('/products')
   .get(getProducts)
-  .post(createProduct);
+  .post(upload.single('image'), createProduct);
 
 router.route('/products/:id')
-  .put(updateProduct)
+  .put(upload.single('image'), updateProduct)
   .delete(deleteProduct);
 
 // Order routes

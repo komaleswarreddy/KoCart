@@ -8,40 +8,39 @@ const fs = require('fs').promises;
 const optimizeAndSaveImage = async (file) => {
   if (!file) return null;
 
-  const filename = `${Date.now()}-${path.parse(file.originalname).name}.webp`;
-  const uploadPath = path.join(__dirname, '../uploads', filename);
+  try {
+    // Generate a unique filename
+    const filename = `${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
+    const uploadDir = path.join(__dirname, '..', 'uploads');
+    const uploadPath = path.join(uploadDir, filename);
 
-  await sharp(file.buffer)
-    .resize(800, 800, {
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .webp({ quality: 80 })
-    .toFile(uploadPath);
+    // Create uploads directory if it doesn't exist
+    await fs.mkdir(uploadDir, { recursive: true });
 
-  return `/uploads/${filename}`;
+    // Optimize and save image
+    await sharp(file.buffer)
+      .resize(800, 800, {
+        fit: 'contain',
+        background: { r: 255, g: 255, b: 255, alpha: 0 }
+      })
+      .webp({ quality: 85 })
+      .toFile(uploadPath);
+
+    return `/uploads/${filename}`;
+  } catch (error) {
+    console.error('Error processing image:', error);
+    throw new Error('Failed to process image');
+  }
 };
 
 // @desc    Get all products
 // @route   GET /api/products
 // @access  Public
 const getProducts = asyncHandler(async (req, res) => {
-  const { categories, minPrice, maxPrice, sortBy, search } = req.query;
+  const { search, category, sortBy } = req.query;
   let query = {};
 
-  // Filter by categories
-  if (categories) {
-    query.category = { $in: categories.split(',') };
-  }
-
-  // Filter by price range
-  if (minPrice || maxPrice) {
-    query.price = {};
-    if (minPrice) query.price.$gte = Number(minPrice);
-    if (maxPrice) query.price.$lte = Number(maxPrice);
-  }
-
-  // Search by name or description
+  // Search filter
   if (search) {
     query.$or = [
       { name: { $regex: search, $options: 'i' } },
@@ -49,35 +48,58 @@ const getProducts = asyncHandler(async (req, res) => {
     ];
   }
 
+  // Category filter
+  if (category) {
+    query.category = category;
+  }
+
+  // Get products
+  let products = await Product.find(query).populate('user', 'name email');
+
   // Sorting
-  let sortOptions = {};
   if (sortBy) {
     switch (sortBy) {
       case 'price_asc':
-        sortOptions.price = 1;
+        products = products.sort((a, b) => a.price - b.price);
         break;
       case 'price_desc':
-        sortOptions.price = -1;
+        products = products.sort((a, b) => b.price - a.price);
         break;
       case 'rating':
-        sortOptions.rating = -1;
+        products = products.sort((a, b) => b.rating - a.rating);
         break;
       default:
-        sortOptions.createdAt = -1;
+        break;
     }
   }
 
-  const products = await Product.find(query).sort(sortOptions);
-  res.json(products);
+  // Format products to include absolute image URLs
+  const formattedProducts = products.map(product => {
+    const productObj = product.toObject();
+    if (productObj.image && !productObj.image.startsWith('http')) {
+      productObj.image = `http://localhost:5000${productObj.image.startsWith('/') ? '' : '/'}${productObj.image}`;
+    }
+    return productObj;
+  });
+
+  res.json(formattedProducts);
 });
 
 // @desc    Get single product
 // @route   GET /api/products/:id
 // @access  Public
 const getProductById = asyncHandler(async (req, res) => {
-  const product = await Product.findById(req.params.id);
+  const product = await Product.findById(req.params.id).populate(
+    'user',
+    'name email'
+  );
+
   if (product) {
-    res.json(product);
+    const productObj = product.toObject();
+    if (productObj.image && !productObj.image.startsWith('http')) {
+      productObj.image = `http://localhost:5000${productObj.image.startsWith('/') ? '' : '/'}${productObj.image}`;
+    }
+    res.json(productObj);
   } else {
     res.status(404);
     throw new Error('Product not found');
@@ -88,81 +110,43 @@ const getProductById = asyncHandler(async (req, res) => {
 // @route   POST /api/products
 // @access  Private/Admin
 const createProduct = asyncHandler(async (req, res) => {
-  const { name, price, description, category, countInStock } = req.body;
+  const { name, price, description, image, category, countInStock } = req.body;
 
-  if (!name || !price || !description || !category) {
-    res.status(400);
-    throw new Error('Please fill in all required fields');
-  }
+  const product = new Product({
+    name,
+    price,
+    user: req.user._id,
+    image: image || '/placeholder.png',
+    category,
+    countInStock,
+    description,
+  });
 
-  try {
-    let imageUrl = null;
-    if (req.file) {
-      imageUrl = await optimizeAndSaveImage(req.file);
-    }
-
-    const product = await Product.create({
-      name,
-      price: Number(price),
-      description,
-      category,
-      countInStock: Number(countInStock) || 0,
-      imageUrl: imageUrl || '',
-      user: req.user._id,
-    });
-
-    res.status(201).json(product);
-  } catch (error) {
-    console.error('Error creating product:', error);
-    res.status(500);
-    throw new Error('Failed to create product. Please try again.');
-  }
+  const createdProduct = await product.save();
+  res.status(201).json(createdProduct);
 });
 
 // @desc    Update a product
 // @route   PUT /api/products/:id
 // @access  Private/Admin
 const updateProduct = asyncHandler(async (req, res) => {
+  const { name, price, description, image, category, countInStock } = req.body;
+
   const product = await Product.findById(req.params.id);
 
-  if (!product) {
+  if (product) {
+    product.name = name || product.name;
+    product.price = price || product.price;
+    product.description = description || product.description;
+    product.image = image || product.image;
+    product.category = category || product.category;
+    product.countInStock = countInStock || product.countInStock;
+
+    const updatedProduct = await product.save();
+    res.json(updatedProduct);
+  } else {
     res.status(404);
     throw new Error('Product not found');
-  }
-
-  try {
-    let imageUrl = product.imageUrl;
-    if (req.file) {
-      // Delete old image if it exists
-      if (product.imageUrl) {
-        const oldImagePath = path.join(__dirname, '..', product.imageUrl);
-        try {
-          await fs.unlink(oldImagePath);
-        } catch (err) {
-          console.error('Error deleting old image:', err);
-        }
-      }
-      imageUrl = await optimizeAndSaveImage(req.file);
-    }
-
-    const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
-      {
-        name: req.body.name || product.name,
-        price: Number(req.body.price) || product.price,
-        description: req.body.description || product.description,
-        category: req.body.category || product.category,
-        countInStock: Number(req.body.countInStock) ?? product.countInStock,
-        imageUrl: imageUrl || product.imageUrl,
-      },
-      { new: true }
-    );
-
-    res.json(updatedProduct);
-  } catch (error) {
-    console.error('Error updating product:', error);
-    res.status(500);
-    throw new Error('Failed to update product. Please try again.');
   }
 });
 
@@ -170,25 +154,32 @@ const updateProduct = asyncHandler(async (req, res) => {
 // @route   DELETE /api/products/:id
 // @access  Private/Admin
 const deleteProduct = asyncHandler(async (req, res) => {
-  const product = await Product.findById(req.params.id);
-
-  if (!product) {
-    res.status(404);
-    throw new Error('Product not found');
-  }
-
-  // Delete product image if it exists and is not the default image
-  if (product.imageUrl && !product.imageUrl.includes('default')) {
-    const imagePath = path.join(__dirname, '..', product.imageUrl);
-    try {
-      await fs.unlink(imagePath);
-    } catch (error) {
-      console.error('Error deleting product image:', error);
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      res.status(404);
+      throw new Error('Product not found');
     }
-  }
 
-  await product.deleteOne();
-  res.json({ message: 'Product removed' });
+    // Delete product image if it exists and is not the default image
+    if (product.image && !product.image.includes('placeholder')) {
+      try {
+        const imagePath = path.join(__dirname, '..', product.image);
+        await fs.access(imagePath); // Check if file exists
+        await fs.unlink(imagePath);
+      } catch (error) {
+        console.error('Error deleting product image:', error);
+        // Continue even if image deletion fails
+      }
+    }
+
+    await product.deleteOne();
+    res.json({ message: 'Product removed successfully' });
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    res.status(error.kind === 'ObjectId' ? 404 : 500);
+    throw new Error(error.message || 'Failed to delete product');
+  }
 });
 
 module.exports = {

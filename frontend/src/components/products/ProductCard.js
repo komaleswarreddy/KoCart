@@ -73,7 +73,7 @@ const ProductCard = ({ product, onCartUpdate }) => {
         )}
         <CardMedia
           component="img"
-          image={product.imageUrl}
+          image={product.image}
           alt={product.name}
           onLoad={handleImageLoad}
           sx={{
@@ -83,10 +83,11 @@ const ProductCard = ({ product, onCartUpdate }) => {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            opacity: loading ? 0 : 1,
-            transition: 'opacity 0.3s',
           }}
-          loading="lazy"
+          onError={(e) => {
+            e.target.src = '/placeholder.png';
+            e.target.onerror = null; // Prevent infinite loop
+          }}
         />
         {product.discount > 0 && (
           <Chip

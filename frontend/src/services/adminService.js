@@ -50,7 +50,12 @@ export const getAdminProducts = async () => {
 
 export const createProduct = async (productData) => {
   try {
-    const { data } = await api.post('/api/admin/products', productData);
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    };
+    const { data } = await api.post('/api/admin/products', productData, config);
     return data;
   } catch (error) {
     throw error.response?.data?.message || 'Error creating product';
@@ -59,7 +64,12 @@ export const createProduct = async (productData) => {
 
 export const updateProduct = async (productId, productData) => {
   try {
-    const { data } = await api.put(`/api/admin/products/${productId}`, productData);
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    };
+    const { data } = await api.put(`/api/admin/products/${productId}`, productData, config);
     return data;
   } catch (error) {
     throw error.response?.data?.message || 'Error updating product';
